@@ -41,28 +41,35 @@ same kubectl commands, just everything on one node.
 
 ## Steps
 
-### 1. Install kubectl
+### 1. Install minikube and kubectl
+
+#### Windows (Chocolatey) — recommended if on Windows
 ```bash
+choco install minikube kubernetes-cli -y
+
+# kubernetes-cli   → this is kubectl
+# -y               → auto confirm, no prompts
+# installs both minikube AND kubectl in one command
+```
+
+#### Linux / macOS (curl)
+```bash
+# install kubectl
 curl -LO "https://dl.k8s.io/release/$(curl -L -s \
   https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
 
 chmod +x kubectl
 sudo mv kubectl /usr/local/bin/
 
-# verify
-kubectl version --client
-# expected: Client Version: v1.x.x
+# install minikube
+curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+sudo install minikube-linux-amd64 /usr/local/bin/minikube
 ```
 
-### 2. Install minikube
+#### Verify both installed (all platforms)
 ```bash
-curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
-
-sudo install minikube-linux-amd64 /usr/local/bin/minikube
-
-# verify
 minikube version
-# expected: minikube version: v1.x.x
+kubectl version --client
 ```
 
 ### 3. Start the cluster
