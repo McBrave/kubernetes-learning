@@ -140,7 +140,117 @@ aws --version
 > credentials automatically from the instance metadata
 
 ---
+## Part 3 — SSH Keys
 
+### What and Why
+kops uses SSH keys to access the EC2 nodes it creates.
+You generate a key pair — kops puts the public key on every node.
+
+```bash
+# generate key pair
+ssh-keygen -t rsa -b 4096 -f ~/.ssh/kops_rsa
+
+# -t rsa          → key type
+# -b 4096         → key strength (bits)
+# -f              → where to save it
+
+# this creates two files:
+# ~/.ssh/kops_rsa        ← private key (never share this)
+# ~/.ssh/kops_rsa.pub    ← public key (goes to EC2 nodes)
+```
+
+---
+
+## Part 4 — AWS Account Setup
+
+### 4a. IAM User
+
+#### What and Why
+Never use your AWS root account for kops.
+Create a dedicated IAM user with only the permissions kops needs.
+
+#### Required Permissions
+AmazonEC2FullAccess
+
+AmazonRoute53FullAccess
+
+AmazonS3FullAccess
+
+IAMFullAccess
+
+AmazonVPCFullAccess
+
+#### Steps
+AWS Console → IAM → Users → Create User
+
+→ attach policies above
+
+→ create access key (CLI type)
+
+→ save Access Key ID and Secret Access Key
+
+#### Configure AWS CLI with the IAM user
+```bash
+aws configure
+
+# it will ask for:
+# AWS Access Key ID     → paste from IAM user
+# AWS Secret Access Key → paste from IAM user
+# Default region        → eu-central-1 (or your region)
+# Default output format → json
+
+# verify it works
+aws sts get-caller-identity
+# expected: returns your IAM user account details
+```
+
+---
+
+### 4b. S3 Bucket
+
+#### What and Why
+kops stores the entire cluster state (config, keys, metadata)
+in an S3 bucket — this is called the state store.
+If you delete this bucket, kops loses track of your cluster.
+
+```bash
+# create the bucket
+aws s3api create-bucket \
+  --bucket kops-state-yourdomain \
+  --region eu-central-1 \
+  --create-bucket-configuration LocationConstraint=eu-central-1
+
+# enable versioning (recommended — lets you roll back state)
+aws s3api put-bucket-versioning \
+  --bucket kops-state-yourdomain \
+  --versioning-configuration Status=Enabled
+
+# set as environment variable so kops finds it automatically
+export KOPS_STATE_STORE=s3://kops-state-yourdomain
+```
+
+> Add the export line to ~/.bashrc or ~/.zshrc
+> so you don't have to set it every session
+
+---
+
+### 4c. Route53
+
+#### What and Why
+kops uses Route53 to create DNS records for the cluster.
+The hosted zone must match the domain you're using for the cluster.
+
+```bash
+# create hosted zone
+aws route53 create-hosted-zone \
+  --name k8s.yourdomain.com \
+  --caller-reference $(date +%s)
+
+# list hosted zones to verify
+aws route53 list-hosted-zones
+
+# copy the 4 NS records and add them to your domain registrar
+# under a subdomain record if using subdomain delegation
 ## Part 5 — Create and Launch the Cluster
 
 ### 5a. Set Environment Variable
