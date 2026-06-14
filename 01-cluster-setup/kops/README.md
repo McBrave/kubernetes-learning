@@ -66,8 +66,26 @@ etcd.k8s.yourdomain.com       ← internal cluster comms
 > or use a subdomain of an existing domain you own
 
 ---
+## Part 2 — SSH Keys
 
-## Part 2 — Machine Setup (where you run kops from)
+### What and Why
+kops uses SSH keys to access the EC2 nodes it creates.
+You generate a key pair — kops puts the public key on every node.
+
+```bash
+# generate key pair
+ssh-keygen -t rsa -b 4096 -f ~/.ssh/kops_rsa
+
+# -t rsa          → key type
+# -b 4096         → key strength (bits)
+# -f              → where to save it
+
+# this creates two files:
+# ~/.ssh/kops_rsa        ← private key (never share this)
+# ~/.ssh/kops_rsa.pub    ← public key (goes to EC2 nodes)
+```
+
+## Part 3 — Machine Setup (where you run kops from)
 
 ### What and Why
 You need a machine to run kops, kubectl, and AWS CLI from.
@@ -140,24 +158,6 @@ aws --version
 > credentials automatically from the instance metadata
 
 ---
-## Part 3 — SSH Keys
-
-### What and Why
-kops uses SSH keys to access the EC2 nodes it creates.
-You generate a key pair — kops puts the public key on every node.
-
-```bash
-# generate key pair
-ssh-keygen -t rsa -b 4096 -f ~/.ssh/kops_rsa
-
-# -t rsa          → key type
-# -b 4096         → key strength (bits)
-# -f              → where to save it
-
-# this creates two files:
-# ~/.ssh/kops_rsa        ← private key (never share this)
-# ~/.ssh/kops_rsa.pub    ← public key (goes to EC2 nodes)
-```
 
 ---
 
