@@ -260,6 +260,15 @@ export KOPS_STATE_STORE=s3://kopsstate956
 # add to ~/.bashrc so it persists
 echo "export KOPS_STATE_STORE=s3://kopsstate956" >> ~/.bashrc
 ```
+## Part 5 — Create and Launch the Cluster
+
+### 5a. Set Environment Variable
+```bash
+export KOPS_STATE_STORE=s3://kopsstate956
+
+# add to ~/.bashrc so it persists
+echo "export KOPS_STATE_STORE=s3://kopsstate956" >> ~/.bashrc
+```
 
 ### 5b. Create Cluster Config
 This writes the cluster config to S3 — does NOT create anything on AWS yet:
