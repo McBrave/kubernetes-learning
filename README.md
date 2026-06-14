@@ -3,7 +3,7 @@
 ## Progress
 - [x] 01 - Cluster Setup
   - [x] minikube — local cluster
-  - [ ] kops — AWS cluster        ← add this line
+  - [x] kops — AWS cluster        ← add this line
 - [ ] 02 - Deployments
 - [ ] 03 - Networking
 - [ ] 04 - Storage
