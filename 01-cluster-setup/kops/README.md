@@ -12,36 +12,36 @@ understanding every piece of infrastructure it creates.
 ---
 
 ## How It Works
-[Your Machine]
+[Your Machine / EC2]
 
 │
 
-[kops CLI]          ← reads config, talks to AWS
+[kops CLI]              ← reads config, talks to AWS
 
 │
 
-├── [S3 Bucket]        ← stores cluster state
+├── [S3 Bucket]           ← stores cluster state
 
-├── [Route53]          ← DNS for cluster
+├── [Route53]             ← DNS for cluster
 
-└── [EC2 Instances]    ← control plane + worker nodes
+└── [EC2 Instances]       ← control plane + worker nodes
 
 ---
 
 ## Prerequisites Overview
 Domain          → needed for Route53 DNS
 
-VM / Machine    → where you run kops and kubectl
+AWS Account     → IAM user, S3 bucket, Route53 hosted zone
 
-kops            → the cluster provisioning tool
+EC2 Instance    → where you run kops and kubectl from
+
+SSH Keys        → to access cluster nodes
+
+kops            → cluster provisioning tool
 
 kubectl         → CLI to talk to the cluster
 
-SSH keys        → to access cluster nodes
-
 AWS CLI         → to talk to AWS from terminal
-
-AWS Account     → with IAM user, S3 bucket, Route53
 
 ---
 
@@ -55,80 +55,142 @@ api.k8s.yourdomain.com        ← control plane endpoint
 etcd.k8s.yourdomain.com       ← internal cluster comms
 
 ### Steps
-```bash
-# if you already have a domain, point its nameservers to Route53
-# Route53 → Hosted Zones → Create Hosted Zone → enter your domain
-# copy the 4 NS records Route53 gives you
-# go to your registrar → update nameservers to those 4
-```
+AWS Console → Route53 → Hosted Zones → Create Hosted Zone
 
-> If you don't have a domain, Route53 can register one
-> or use a subdomain of an existing domain you own
+→ enter your domain name
+
+→ type: Public hosted zone      ← must be public, not private
+
+public = reachable from internet
+
+private = only inside a VPC
+
+→ create
+
+→ copy the 4 NS records Route53 gives you
+
+→ go to your domain registrar
+
+→ update nameservers to those 4 NS records
+
+> A public hosted zone is required because kops nodes need to
+> resolve each other's DNS names over the internet.
+> Private hosted zones only work inside a VPC and won't work here.
 
 ---
-## Part 2 — SSH Keys
 
-### What and Why
-kops uses SSH keys to access the EC2 nodes it creates.
-You generate a key pair — kops puts the public key on every node.
+## Part 2 — AWS Account Setup
+
+### 2a. IAM User
+
+#### What and Why
+Never use your AWS root account for kops.
+Create a dedicated IAM user for kops to use.
+
+#### Steps
+AWS Console → IAM → Users → Create User
+
+→ username: kops
+
+→ attach policies directly
+
+→ search and select: AdministratorAccess    ← full access for practice purposes
+
+→ create user
+
+→ go to the user → Security credentials
+
+→ create access key → CLI type
+
+→ save Access Key ID and Secret Access Key somewhere safe
+
+> AdministratorAccess gives full AWS account access.
+> This is acceptable for learning and practice only.
+> In production always use least privilege —
+> only grant the specific permissions kops actually needs.
+
+---
+
+### 2b. S3 Bucket
+
+#### What and Why
+kops stores the entire cluster state (config, keys, metadata)
+in an S3 bucket — this is called the state store.
+If you delete this bucket, kops loses track of your cluster.
 
 ```bash
-# generate key pair
-ssh-keygen -t rsa -b 4096 -f ~/.ssh/kops_rsa
+# create the bucket
+aws s3api create-bucket \
+  --bucket kops-state-yourdomain \
+  --region us-east-1 \
+  --create-bucket-configuration LocationConstraint=us-east-1
 
-# -t rsa          → key type
-# -b 4096         → key strength (bits)
-# -f              → where to save it
-
-# this creates two files:
-# ~/.ssh/kops_rsa        ← private key (never share this)
-# ~/.ssh/kops_rsa.pub    ← public key (goes to EC2 nodes)
+# enable versioning (recommended — lets you roll back state)
+aws s3api put-bucket-versioning \
+  --bucket kops-state-yourdomain \
+  --versioning-configuration Status=Enabled
 ```
 
-## Part 3 — Machine Setup (where you run kops from)
+> kops-state-yourdomain is just an example name.
+> Replace it with any unique name you choose.
+> S3 bucket names must be globally unique across all AWS accounts.
+> Examples: kops-state-myproject, kops-state-learning, kops-state-john
+
+---
+
+## Part 3 — EC2 Instance (where you run kops from)
 
 ### What and Why
 You need a machine to run kops, kubectl, and AWS CLI from.
-Two options — local machine or an EC2 instance.
+Two options — your local machine or an EC2 instance.
 
----
-
-### Option A — Local Machine (Windows)
-
-```bash
-choco install minikube kubernetes-cli -y
-```
-
----
-
-### Option B — EC2 Instance (recommended for AWS workflows)
-
-#### What and Why
-Running kops from an EC2 instance inside AWS has advantages:
+Running kops from EC2 inside AWS has advantages:
 - no need to configure AWS CLI credentials manually
-  → attach an IAM role to the EC2 instead, it authenticates automatically
+  → attach an IAM role to EC2, it authenticates automatically
 - faster AWS API calls since you're already inside AWS network
 - no local environment setup issues
 
-#### Steps
+---
+
+### Option A — EC2 Instance (recommended)
+
+#### Launch the EC2
 AWS Console → EC2 → Launch Instance
 
-→ choose Ubuntu or Amazon Linux 2
+→ name: kops-management
 
-→ instance type: t3.micro (enough for running commands)
+→ OS: Ubuntu
 
-→ key pair: use your existing SSH key
+→ instance type: t3.micro (enough just for running commands)
 
-→ IAM instance profile: attach the IAM role with kops permissions
+→ key pair: create new or use existing SSH key
+
+→ security group: create new
+
+Inbound rules:
+
+Type: SSH
+
+Port: 22
+
+Source: My IP     ← your IP only, not 0.0.0.0/0
+
+this means only YOU can SSH into this machine
+
+never open SSH to the whole internet
 
 → launch
 
-Then SSH into it:
+> Only one inbound rule needed — SSH from your IP.
+> No need to open HTTP, HTTPS, or any other port
+> since this EC2 is just a management machine, not serving traffic.
+
+#### SSH into the EC2
 ```bash
 ssh -i ~/.ssh/your-key.pem ubuntu@<ec2-public-ip>
 ```
 
-Then install tools on the EC2:
+#### Install tools on the EC2
 ```bash
 # kubectl
 curl -LO "https://dl.k8s.io/release/$(curl -L -s \
@@ -146,208 +208,191 @@ curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip
 unzip awscliv2.zip && sudo ./aws/install
 ```
 
-#### Verify installs
-```bash
-kops version
-kubectl version --client
-aws --version
-```
-
-> Key benefit: because the EC2 has an IAM role attached,
-> you skip `aws configure` entirely — AWS CLI picks up
-> credentials automatically from the instance metadata
-
----
-
----
-
-## Part 4 — AWS Account Setup
-
-### 4a. IAM User
-
-#### What and Why
-Never use your AWS root account for kops.
-Create a dedicated IAM user with only the permissions kops needs.
-
-#### Required Permissions
-AmazonEC2FullAccess
-
-AmazonRoute53FullAccess
-
-AmazonS3FullAccess
-
-IAMFullAccess
-
-AmazonVPCFullAccess
-
-#### Steps
-AWS Console → IAM → Users → Create User
-
-→ attach policies above
-
-→ create access key (CLI type)
-
-→ save Access Key ID and Secret Access Key
-
-#### Configure AWS CLI with the IAM user
+#### Configure AWS CLI with IAM user credentials
 ```bash
 aws configure
 
 # it will ask for:
-# AWS Access Key ID     → paste from IAM user
+# AWS Access Key ID     → paste from IAM user you created in Part 2
 # AWS Secret Access Key → paste from IAM user
-# Default region        → eu-central-1 (or your region)
+# Default region        → us-east-1
 # Default output format → json
 
 # verify it works
 aws sts get-caller-identity
-# expected: returns your IAM user account details
+# expected: returns your kops IAM user account details
 ```
 
 ---
 
-### 4b. S3 Bucket
-
-#### What and Why
-kops stores the entire cluster state (config, keys, metadata)
-in an S3 bucket — this is called the state store.
-If you delete this bucket, kops loses track of your cluster.
-
+### Option B — Local Machine (Windows)
 ```bash
-# create the bucket
-aws s3api create-bucket \
-  --bucket kops-state-yourdomain \
-  --region eu-central-1 \
-  --create-bucket-configuration LocationConstraint=eu-central-1
+choco install minikube kubernetes-cli -y
+# then run aws configure same as above
+```
 
-# enable versioning (recommended — lets you roll back state)
-aws s3api put-bucket-versioning \
-  --bucket kops-state-yourdomain \
-  --versioning-configuration Status=Enabled
+---
 
-# set as environment variable so kops finds it automatically
+## Part 4 — SSH Keys
+
+### What and Why
+kops needs SSH keys to access the EC2 nodes it creates during cluster setup.
+You generate a key pair here — kops puts the public key on every
+cluster node via the --ssh-public-key flag during cluster creation.
+Private key (id_ed25519)     → stays on your machine, like your house key
+
+Public key (id_ed25519.pub)  → kops puts this on every cluster node
+
+like the lock on the door
+
+When you SSH into a node later, your private key is checked
+against the public key on the node — if they match, access is granted.
+
+### Generate the key pair
+```bash
+ssh-keygen -t ed25519
+
+# accept default location (~/.ssh/id_ed25519)
+# add a passphrase for extra security or leave empty
+
+# this creates two files:
+# ~/.ssh/id_ed25519        ← private key, never share this
+# ~/.ssh/id_ed25519.pub    ← public key, this goes to cluster nodes
+```
+
+### Verify keys exist
+```bash
+ls ~/.ssh/
+# you should see both id_ed25519 and id_ed25519.pub
+```
+
+> ed25519 is the modern SSH key type — faster and more secure than
+> the older rsa type. Always prefer ed25519 for new keys.
+
+---
+
+## Part 5 — Create and Launch the Cluster
+
+### 5a. Set Environment Variables
+```bash
+# set for current session
 export KOPS_STATE_STORE=s3://kops-state-yourdomain
+export NAME=mydomain
+
+# make both permanent so they survive terminal restarts
+echo "export KOPS_STATE_STORE=s3://kops-state-yourdomain" >> ~/.bashrc
+echo "export NAME=mydomain" >> ~/.bashrc
+
+# apply immediately without restarting terminal
+source ~/.bashrc
+
+# verify both are set
+echo $KOPS_STATE_STORE
+echo $NAME
+# expected:
+# s3://kops-state-yourdomain
+# mydomain
 ```
 
-> Add the export line to ~/.bashrc or ~/.zshrc
-> so you don't have to set it every session
+> source ~/.bashrc reloads the file immediately.
+> Without it you would have to close and reopen the terminal
+> for the variables to take effect.
 
 ---
-
-### 4c. Route53
-
-#### What and Why
-kops uses Route53 to create DNS records for the cluster.
-The hosted zone must match the domain you're using for the cluster.
-
-```bash
-# create hosted zone
-aws route53 create-hosted-zone \
-  --name k8s.yourdomain.com \
-  --caller-reference $(date +%s)
-
-# list hosted zones to verify
-aws route53 list-hosted-zones
-
-# copy the 4 NS records and add them to your domain registrar
-# under a subdomain record if using subdomain delegation
-## Part 5 — Create and Launch the Cluster
-
-### 5a. Set Environment Variable
-```bash
-export KOPS_STATE_STORE=s3://kopsstate956
-
-# add to ~/.bashrc so it persists
-echo "export KOPS_STATE_STORE=s3://kopsstate956" >> ~/.bashrc
-```
-## Part 5 — Create and Launch the Cluster
-
-### 5a. Set Environment Variable
-```bash
-export KOPS_STATE_STORE=s3://kopsstate956
-
-# add to ~/.bashrc so it persists
-echo "export KOPS_STATE_STORE=s3://kopsstate956" >> ~/.bashrc
-```
 
 ### 5b. Create Cluster Config
 This writes the cluster config to S3 — does NOT create anything on AWS yet:
 
 ```bash
 kops create cluster \
-  --name=mydomain \
-  --state=s3://kopsstate956 \
+  --name=$NAME \
+  --state=$KOPS_STATE_STORE \
   --zones=us-east-1a,us-east-1b \
   --node-count=2 \
   --node-size=t3.small \
   --control-plane-size=t3.medium \
-  --dns-zone=mydomain \
+  --dns-zone=$NAME \
   --node-volume-size=12 \
   --control-plane-volume-size=12 \
   --ssh-public-key ~/.ssh/id_ed25519.pub
 ```
 
 #### What each flag does
---name                  → cluster name, matches your Route53 domain
+--name                      → cluster name, matches your Route53 domain
 
---state                 → which S3 bucket to store cluster state in
+--state                     → which S3 bucket to store cluster state in
 
---zones                 → which AWS availability zones to spread across
+--zones                     → AWS availability zones to spread across
 
 two zones = high availability
 
---node-count            → how many worker nodes to create
+--node-count                → how many worker nodes to create
 
---node-size             → EC2 instance type for worker nodes
+--node-size                 → EC2 instance type for worker nodes
 
---control-plane-size    → EC2 instance type for control plane
+--control-plane-size        → EC2 instance type for control plane
 
-larger than nodes because it runs more components
+larger because it runs etcd,
 
---dns-zone              → Route53 hosted zone for cluster DNS
+API server and scheduler
 
---node-volume-size      → EBS disk size in GB for worker nodes
+--dns-zone                  → Route53 hosted zone for cluster DNS
+
+--node-volume-size          → EBS disk size in GB for worker nodes
 
 --control-plane-volume-size → EBS disk size in GB for control plane
 
---ssh-public-key        → public key to put on every node
+--ssh-public-key            → public key to put on every node
 
-id_ed25519 is newer and more secure than rsa
+~/.ssh/id_ed25519.pub was generated in Part 4
 
-### 5c. Apply and Launch the Cluster
-This is what actually creates everything on AWS:
+---
 
+### 5c. Dry Run — Review Before Applying
+```bash
+# preview what kops WOULD create — nothing is built yet
+kops update cluster --name=$NAME
+
+# review the output carefully
+# if everything looks correct proceed to next step
+```
+
+> always dry run first — without --yes kops only shows a plan
+
+---
+
+### 5d. Apply and Launch the Cluster
 ```bash
 kops update cluster \
-  --name=mydomain \
-  --state=s3://kopsstate956 \
+  --name=$NAME \
   --yes \
   --admin
 ```
 
 #### What each flag does
---yes     → actually apply changes (without it, just shows a dry run plan)
+--yes     → actually apply changes and create everything on AWS
+
+without it, just shows a dry run plan
 
 --admin   → writes kubectl credentials to ~/.kube/config automatically
 
 so kubectl works immediately after cluster comes up
 
-> Without --yes the command just previews what would be created.
-> Always run without --yes first to review, then add --yes to apply.
+---
 
-### 5d. Wait for Cluster to Come Up
+### 5e. Wait for Cluster to Come Up
 ```bash
-# watch nodes come up (takes 5-10 min)
+# wait up to 10 minutes for cluster to be ready
 kops validate cluster --wait 10m
 
 # once valid, check nodes
 kubectl get nodes
 
 # expected:
-# NAME                STATUS   ROLES           
-# i-xxxxx.ec2        Ready    control-plane   
-# i-xxxxx.ec2        Ready    node            
-# i-xxxxx.ec2        Ready    node            
+# NAME              STATUS   ROLES
+# i-xxxxx.ec2      Ready    control-plane
+# i-xxxxx.ec2      Ready    node
+# i-xxxxx.ec2      Ready    node
 ```
 
 ---
@@ -355,25 +400,48 @@ kubectl get nodes
 ## What I Learned
 - kops create cluster only writes config to S3 — nothing on AWS until update --yes
 - --yes flag is the real trigger — always dry run first without it
-- --admin flag is convenient — saves manually copying kubeconfig
-- two zones (us-east-1a, us-east-1b) = high availability, nodes spread across both
+- --admin flag saves manually copying kubeconfig after cluster comes up
+- two zones = high availability, nodes spread across both
 - t3.medium for control plane because it runs etcd, API server, scheduler
-- id_ed25519 is a newer SSH key type, more secure than rsa
-- running kops from EC2 with IAM role skips credentials setup entirely
-- node-volume-size 12GB is minimum for learning — increase for real workloads
+- id_ed25519 is modern SSH key type, more secure and faster than rsa
+- running kops from EC2 with IAM role skips aws configure entirely
+- Route53 hosted zone must be public — private zones only work inside a VPC
+- AdministratorAccess is fine for learning but never use in production
+- S3 bucket name just needs to be globally unique — domain name not required
 
 ---
 
 ## Gotchas & Mistakes
-- ran kops update --yes before checking the plan → always dry run first
-- forgot --admin flag → kubectl had no config, had to export kubeconfig manually
+- used root account credentials in AWS CLI → bad practice
+  fix: always create a separate IAM user for tools like kops
+
+- used specific IAM policies → kept hitting AccessDeniedException errors
+  fix: for learning attach AdministratorAccess and focus on kops, not IAM debugging
+  remember: in production always use least privilege
+
+- forgot to set NAME variable → kops commands kept asking for cluster name
+  fix: export NAME=mydomain and add to ~/.bashrc
+
+- forgot source ~/.bashrc after adding variables → variables not found
+  fix: always run source ~/.bashrc after editing it
+
+- ran kops update --yes without dry run first → unexpected changes
+  fix: always run kops update cluster without --yes first to review
+
+- forgot --admin flag on update → kubectl had no config
   fix: kops export kubecfg --admin
-- cluster took longer than expected to be Ready → Route53 DNS not fully propagated
-  fix: dig NS mydomain to verify DNS before creating cluster
-- used t3.micro for control plane → ran out of memory, scheduler kept crashing
-  fix: t3.medium minimum for control plane
-- node-volume too small → pods got evicted due to disk pressure
-  fix: 12GB minimum, 20GB recommended for real use
+
+- Route53 hosted zone set to private → cluster DNS failed
+  fix: must use public hosted zone for kops
+
+- cluster took longer than expected to be Ready → DNS not propagated yet
+  fix: verify with dig NS mydomain before creating cluster
+
+- opened SSH in security group to 0.0.0.0/0 → security risk
+  fix: always restrict SSH inbound rule to your IP only
+
+- S3 versioning not enabled from the start → couldn't roll back state
+  fix: always enable versioning right after creating the bucket
 
 ---
 
@@ -381,16 +449,25 @@ kubectl get nodes
 
 | Command | What it does |
 |---|---|
-| `kops create cluster ...` | write cluster config to S3 (no AWS resources yet) |
-| `kops update cluster --yes` | actually create everything on AWS |
-| `kops validate cluster` | check if cluster is healthy |
-| `kops validate cluster --wait 10m` | wait up to 10 min for cluster to be ready |
+| `export NAME=mydomain` | set cluster name variable |
+| `export KOPS_STATE_STORE=s3://...` | set state store variable |
+| `echo "export ..." >> ~/.bashrc` | make variable permanent |
+| `source ~/.bashrc` | apply bashrc changes immediately |
+| `echo $NAME` | verify variable is set |
+| `aws sts get-caller-identity` | verify which AWS user is active |
+| `aws s3 ls` | list your S3 buckets |
+| `aws route53 list-hosted-zones` | list Route53 zones |
+| `kops create cluster ...` | write cluster config to S3 only |
+| `kops update cluster --name=$NAME` | dry run, preview changes |
+| `kops update cluster --name=$NAME --yes --admin` | create everything on AWS |
+| `kops validate cluster --wait 10m` | wait for cluster to be ready |
 | `kops get cluster` | list clusters kops knows about |
-| `kops delete cluster --yes` | destroy everything (EC2, DNS, volumes) |
-| `kops export kubecfg --admin` | manually write kubeconfig if you forgot --admin |
+| `kops delete cluster --name=$NAME --yes` | destroy everything |
+| `kops export kubecfg --admin` | fix missing kubeconfig |
 | `kubectl get nodes` | verify nodes are Ready |
+| `dig NS mydomain` | verify DNS is propagating |
 
 ---
 
 ## Next Section
-→ [Deployments](../../02-deployments/README.md)
+→ [02 — Deployments](../../02-deployments/README.md)
