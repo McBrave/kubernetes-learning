@@ -147,4 +147,4 @@ kubectl apply -f vproapppod.yaml
 ---
 
 ## Next Section
-→ [Deployments](../03-deployments/README.md)
+→ [namespaces](../03-namespaces/README.md)
