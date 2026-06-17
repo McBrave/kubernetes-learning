@@ -5,9 +5,10 @@
   - [x] minikube — local cluster
   - [x] kops — AWS cluster
 - [x] 02 - Pod Definitions
-- [ ] 03 - Deployments
-- [ ] 04 - Networking
-- [ ] 05 - Storage
+- [x] 03 - Namespaces
+- [ ] 04 - Deployments
+- [ ] 05 - Networking
+- [ ] 06 - Storage
 
 ---
 
