@@ -7,7 +7,8 @@
 - [x] 02 - Pod Definitions
 - [x] 03 - Namespaces
 - [x] 04 - services
-- [ ] 05 - Deployments
+- [x] 05 - ReplicaSets
+- [ ] 06 - Deployments
 ---
 
 ## 01 — Cluster Setup
