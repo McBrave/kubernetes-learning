@@ -6,10 +6,8 @@
   - [x] kops — AWS cluster
 - [x] 02 - Pod Definitions
 - [x] 03 - Namespaces
-- [ ] 04 - Deployments
-- [ ] 05 - Networking
-- [ ] 06 - Storage
-
+- [x] 04 - services
+- [ ] 05 - Deployments
 ---
 
 ## 01 — Cluster Setup
