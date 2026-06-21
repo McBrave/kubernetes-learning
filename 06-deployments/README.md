@@ -123,7 +123,23 @@ Service    → finds pods with label app: vproapp, routes traffic to them
 They never reference each other directly — the shared LABEL is the only link.
 This is why rolling updates work seamlessly: the Service keeps routing to
 whatever currently has the matching label, even as pods get replaced.
+---
 
+## Rolling Back — Revisions
+
+- Kubernetes auto-assigns revision numbers on every deployment change
+- you don't set these manually
+- you CAN label why each revision happened (change-cause):
+
+  kubectl annotate deployment/<name> \
+    kubernetes.io/change-cause="reason here"
+
+- view history:    kubectl rollout history deployment/<name>
+- rollback prev:   kubectl rollout undo deployment/<name>
+- rollback to N:   kubectl rollout undo deployment/<name> --to-revision=N
+
+- under the hood: each revision is an old ReplicaSet kept at 0 pods,
+  rollback just scales the chosen one back up
 ---
 
 ## What I Learned
