@@ -8,7 +8,8 @@
 - [x] 03 - Namespaces
 - [x] 04 - services
 - [x] 05 - ReplicaSets
-- [ ] 06 - Deployments
+- [x] 06 - Deployments
+- [ ] 07 - ConfigMaps & Secrets
 ---
 
 ## 01 — Cluster Setup
