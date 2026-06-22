@@ -16,7 +16,8 @@
 - [x] 04 - Services
 - [x] 05 - ReplicaSets
 - [x] 06 - Deployments
-- [ ] 07 - ConfigMaps & Secrets
+- [x] 07 -command-and-args
+- [ ] 08 - ConfigMaps & Secrets
 
 ---
 
@@ -47,7 +48,11 @@ Keeping N identical pods alive with self-healing and scaling.
 [→ details](06-deployments/README.md)
 Managing ReplicaSets with rolling updates and rollbacks. The object used in real life.
 
-### 07 — ConfigMaps & Secrets
+### 07 - Command and Arguments
+[→ details](07-command-and-arguments/README.md)
+Override a container's default startup command and arguments.
+
+### 08 — ConfigMaps & Secrets
 *(in progress)*
 
 ---
