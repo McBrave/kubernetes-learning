@@ -17,7 +17,8 @@
 - [x] 05 - ReplicaSets
 - [x] 06 - Deployments
 - [x] 07 -command-and-args
-- [ ] 08 - ConfigMaps & Secrets
+- [x] 08-volumes
+- [ ] 09 - ConfigMaps & Secrets
 
 ---
 
