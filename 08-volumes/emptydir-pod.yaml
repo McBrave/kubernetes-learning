@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: emptydir-demo
+spec:
+  containers:
+    - name: writer
+      image: busybox
+      command: ["sh", "-c", "echo hello > /cache/data.txt && sleep 3600"]
+      volumeMounts:
+        - name: shared-cache      # must match the volume name below
+          mountPath: /cache       # where it appears inside THIS container
+  volumes:
+    - name: shared-cache          # the volume definition
+      emptyDir: {}                # type: empty directory
